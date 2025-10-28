@@ -12,6 +12,266 @@
         }
     ],
     "paths": {
+        "/api/v1/auth/login": {
+            "post": {
+                "tags": [
+                    "Authentification"
+                ],
+                "summary": "Connexion utilisateur",
+                "description": "Authentifie un utilisateur et retourne les tokens d'accès et de rafraîchissement",
+                "operationId": "login",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "email",
+                                    "password"
+                                ],
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "admin@banque.com"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "example": "password123"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Connexion réussie",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Connexion réussie"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "user": {
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string",
+                                                            "format": "uuid"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        },
+                                                        "email": {
+                                                            "type": "string",
+                                                            "format": "email"
+                                                        },
+                                                        "role": {
+                                                            "type": "string",
+                                                            "enum": [
+                                                                "admin",
+                                                                "client"
+                                                            ]
+                                                        },
+                                                        "is_active": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "access_token": {
+                                                    "type": "string",
+                                                    "example": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9..."
+                                                },
+                                                "refresh_token": {
+                                                    "type": "string",
+                                                    "example": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9..."
+                                                },
+                                                "token_type": {
+                                                    "type": "string",
+                                                    "example": "Bearer"
+                                                },
+                                                "expires_in": {
+                                                    "type": "integer",
+                                                    "example": 3600
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Identifiants invalides",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Identifiants invalides"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/refresh": {
+            "post": {
+                "tags": [
+                    "Authentification"
+                ],
+                "summary": "Rafraîchir le token d'accès",
+                "description": "Utilise le refresh token pour générer un nouveau token d'accès",
+                "operationId": "refresh",
+                "responses": {
+                    "200": {
+                        "description": "Token rafraîchi avec succès",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Token rafraîchi avec succès"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "access_token": {
+                                                    "type": "string",
+                                                    "example": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9..."
+                                                },
+                                                "token_type": {
+                                                    "type": "string",
+                                                    "example": "Bearer"
+                                                },
+                                                "expires_in": {
+                                                    "type": "integer",
+                                                    "example": 3600
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Token de rafraîchissement invalide",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Token de rafraîchissement invalide"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "passport": [
+                            "refresh-token"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/api/v1/auth/logout": {
+            "post": {
+                "tags": [
+                    "Authentification"
+                ],
+                "summary": "Déconnexion utilisateur",
+                "description": "Invalide le token d'accès actuel de l'utilisateur",
+                "operationId": "logout",
+                "responses": {
+                    "200": {
+                        "description": "Déconnexion réussie",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Déconnexion réussie"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Non authentifié"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "passport": [
+                            "*"
+                        ]
+                    }
+                ]
+            }
+        },
         "/api/v1/comptes/{compteId}": {
             "get": {
                 "tags": [
@@ -1266,6 +1526,10 @@
         }
     },
     "tags": [
+        {
+            "name": "Authentification",
+            "description": "Authentification"
+        },
         {
             "name": "Comptes",
             "description": "Comptes"
