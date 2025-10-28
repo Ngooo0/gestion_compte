@@ -80,4 +80,20 @@ class Compte extends Model
             $q->where('telephone', $telephone);
         });
     }
+
+    /**
+     * Attribut solde calculé : Somme des dépôts - Somme des retraits
+     */
+    public function getSoldeCalculeAttribute(): float
+    {
+        $debits = $this->transactions()
+            ->where('type', 'depot')
+            ->sum('montant');
+
+        $credits = $this->transactions()
+            ->where('type', 'retrait')
+            ->sum('montant');
+
+        return $debits - $credits;
+    }
 }

@@ -66,6 +66,23 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('/comptes/{compte}', [CompteController::class, 'show'])
             ->name('comptes.show');
 
+        /**
+         * @group Comptes
+         * @description Créer un nouveau compte bancaire
+         * @bodyParam type string required Type de compte (cheque, epargne) Example: cheque
+         * @bodyParam soldeInitial numeric required Solde initial (min: 10000) Example: 500000
+         * @bodyParam devise string required Devise (XOF, EUR, USD) Example: XOF
+         * @bodyParam client object required Informations du client
+         * @bodyParam client.id integer nullable ID du client existant Example: null
+         * @bodyParam client.titulaire string required Nom du titulaire (si nouveau client) Example: Hawa BB Wane
+         * @bodyParam client.email string required Email (si nouveau client) Example: cheikh.sy@example.com
+         * @bodyParam client.telephone string required Téléphone sénégalais Example: +221771234567
+         * @bodyParam client.adresse string required Adresse Example: Dakar, Sénégal
+         * @responseFile responses/comptes/store.json
+         */
+        Route::post('/comptes', [CompteController::class, 'store'])
+            ->name('comptes.store');
+
     });
 
 });
