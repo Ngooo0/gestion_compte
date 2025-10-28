@@ -83,6 +83,21 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('/comptes', [CompteController::class, 'store'])
             ->name('comptes.store');
 
+        /**
+         * @group Comptes
+         * @description Modifier partiellement les informations d'un compte
+         * @urlParam compte string required ID du compte Example: 550e8400-e29b-41d4-a716-446655440000
+         * @bodyParam titulaire string optional Nouveau nom du titulaire Example: Amadou Diallo Junior
+         * @bodyParam informationsClient object optional Informations client à modifier
+         * @bodyParam informationsClient.telephone string optional Nouveau téléphone Example: +221771234568
+         * @bodyParam informationsClient.email string optional Nouveau email Example: nouveau.email@example.com
+         * @bodyParam informationsClient.password string optional Nouveau mot de passe Example: nouveauMotDePasse123
+         * @bodyParam informationsClient.nci string optional Nouveau NCI Example: 1980123456789
+         * @responseFile responses/comptes/update.json
+         */
+        Route::patch('/comptes/{compte}', [CompteController::class, 'update'])
+            ->name('comptes.update');
+
     });
 
 });
