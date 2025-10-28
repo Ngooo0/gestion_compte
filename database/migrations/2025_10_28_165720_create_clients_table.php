@@ -19,7 +19,8 @@ return new class extends Migration
             $table->string('telephone');
             $table->text('adresse');
             $table->date('date_naissance');
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->uuid('user_id');
+            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
             $table->timestamps();
 
             $table->index(['nom', 'prenom']);
