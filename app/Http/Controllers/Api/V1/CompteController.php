@@ -3,14 +3,20 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Exceptions\CompteNotFoundException;
+use App\Events\ClientCreated;
 use App\Exceptions\UnauthorizedAccessException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreCompteRequest;
 use App\Http\Resources\CompteResource;
+use App\Models\Client;
 use App\Models\Compte;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 
 /**
@@ -323,11 +329,179 @@ class CompteController extends Controller
     }
 
     /**
-     * Store a newly created resource in storage.
+     * @OA\Post(
+     *     path="/api/v1/comptes",
+     *     summary="Créer un nouveau compte",
+     *     description="Crée un nouveau compte bancaire avec vérification du client existant ou création automatique",
+     *     operationId="createCompte",
+     *     tags={"Comptes"},
+     *     security={{"passport": {"write-comptes"}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"type", "soldeInitial", "devise", "client"},
+     *             @OA\Property(property="type", type="string", enum={"cheque", "epargne"}, example="cheque"),
+     *             @OA\Property(property="soldeInitial", type="number", format="decimal", minimum=10000, example=500000),
+     *             @OA\Property(property="devise", type="string", enum={"XOF", "EUR", "USD"}, example="XOF"),
+     *             @OA\Property(
+     *                 property="client",
+     *                 type="object",
+     *                 @OA\Property(property="id", type="integer", nullable=true, example=null),
+     *                 @OA\Property(property="titulaire", type="string", example="Hawa BB Wane"),
+     *                 @OA\Property(property="nci", type="string", example="1980123456789"),
+     *                 @OA\Property(property="email", type="string", format="email", example="cheikh.sy@example.com"),
+     *                 @OA\Property(property="telephone", type="string", example="+221771234567"),
+     *                 @OA\Property(property="adresse", type="string", example="Dakar, Sénégal")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Compte créé avec succès",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Compte créé avec succès"),
+     *             @OA\Property(property="data", ref="#/components/schemas/Compte")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Données invalides",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Les données fournies sont invalides"),
+     *             @OA\Property(
+     *                 property="error",
+     *                 @OA\Property(property="code", type="string", example="VALIDATION_ERROR"),
+     *                 @OA\Property(property="message", type="string", example="Les données fournies sont invalides"),
+     *                 @OA\Property(
+     *                     property="details",
+     *                     type="object",
+     *                     @OA\Property(property="soldeInitial", type="array", @OA\Items(type="string", example="Le solde initial doit être supérieur à 0"))
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Non authentifié",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Non authentifié")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Accès refusé",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Accès non autorisé")
+     *         )
+     *     )
+     * )
      */
-    public function store(Request $request)
+    public function store(StoreCompteRequest $request): JsonResponse
     {
-        //
+        return DB::transaction(function () use ($request) {
+            $validated = $request->validated();
+
+            // Vérifier si le client existe ou le créer
+            $client = $this->findOrCreateClient($validated['client']);
+
+            // Générer l'UUID pour le compte
+            $compteId = (string) Str::uuid();
+
+            // Créer le compte
+            $compte = Compte::create([
+                'id' => $compteId,
+                'numero' => null, // Sera généré automatiquement par le mutator
+                'type' => $validated['type'],
+                'solde' => $validated['soldeInitial'],
+                'devise' => $validated['devise'],
+                'statut' => 'actif',
+                'client_id' => $client->id,
+            ]);
+
+            // Créer la transaction initiale de dépôt
+            $compte->transactions()->create([
+                'id' => (string) Str::uuid(),
+                'reference' => 'DEP-' . strtoupper(Str::random(10)),
+                'type' => 'depot',
+                'montant' => $validated['soldeInitial'],
+                'devise' => $validated['devise'],
+                'description' => 'Dépôt initial lors de la création du compte',
+                'statut' => 'validee',
+                'date_transaction' => now(),
+                'compte_id' => $compte->id,
+            ]);
+
+            Log::info('Nouveau compte créé', [
+                'compte_id' => $compte->id,
+                'numero_compte' => $compte->numero,
+                'client_id' => $client->id,
+                'type' => $validated['type'],
+                'solde_initial' => $validated['soldeInitial'],
+            ]);
+
+            return $this->successResponse(
+                new CompteResource($compte),
+                'Compte créé avec succès',
+                201
+            );
+        });
+    }
+
+    /**
+     * Recherche ou crée un client selon les données fournies
+     *
+     * @param array $clientData
+     * @return Client
+     */
+    private function findOrCreateClient(array $clientData): Client
+    {
+        // Si un ID de client est fourni, vérifier qu'il existe
+        if (!empty($clientData['id'])) {
+            $client = Client::find($clientData['id']);
+            if (!$client) {
+                throw new \InvalidArgumentException("Client avec l'ID {$clientData['id']} n'existe pas.");
+            }
+            return $client;
+        }
+
+        // Créer un nouveau client
+        $generatedPassword = Str::random(12);
+        $verificationCode = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+        $client = Client::create([
+            'nom' => $clientData['titulaire'],
+            'prenom' => '', // Peut être extrait du nom complet si nécessaire
+            'email' => $clientData['email'],
+            'telephone' => $clientData['telephone'],
+            'adresse' => $clientData['adresse'],
+            'date_naissance' => now()->subYears(25)->format('Y-m-d'), // Valeur par défaut
+            'user_id' => $this->getCurrentUserId(),
+        ]);
+
+        // Déclencher l'événement de création du client
+        event(new ClientCreated($client, $generatedPassword, $verificationCode));
+
+        Log::info('Nouveau client créé', [
+            'client_id' => $client->id,
+            'email' => $client->email,
+            'telephone' => $client->telephone,
+        ]);
+
+        return $client;
+    }
+
+    /**
+     * Récupère l'ID de l'utilisateur actuel
+     *
+     * @return int
+     */
+    private function getCurrentUserId(): int
+    {
+        return auth()->id() ?? 1; // Fallback pour les tests
     }
 
     /**
