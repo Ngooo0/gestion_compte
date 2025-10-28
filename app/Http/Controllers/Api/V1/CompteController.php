@@ -647,10 +647,89 @@ class CompteController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
+     * @OA\Delete(
+     *     path="/api/v1/comptes/{compteId}",
+     *     summary="Supprimer un compte (soft delete)",
+     *     description="Effectue une suppression douce du compte. Seul un administrateur peut supprimer un compte. Le compte reste accessible via les requêtes withTrashed() mais n'apparaît plus dans les listes normales.",
+     *     operationId="deleteCompte",
+     *     tags={"Comptes"},
+     *     security={{"passport": {"write-comptes"}}},
+     *     @OA\Parameter(
+     *         name="compteId",
+     *         in="path",
+     *         description="ID du compte à supprimer",
+     *         required=true,
+     *         @OA\Schema(type="string", format="uuid", example="550e8400-e29b-41d4-a716-446655440000")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Compte supprimé avec succès (soft delete)",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Compte supprimé avec succès"),
+     *             @OA\Property(property="data", type="object",
+     *                 @OA\Property(property="id", type="string", format="uuid", example="550e8400-e29b-41d4-a716-446655440000"),
+     *                 @OA\Property(property="numeroCompte", type="string", example="C00123456"),
+     *                 @OA\Property(property="statut", type="string", example="ferme"),
+     *                 @OA\Property(property="dateFermeture", type="string", format="date-time", example="2025-10-19T11:15:00Z")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Accès refusé - seuls les administrateurs peuvent supprimer des comptes",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Accès non autorisé - seuls les administrateurs peuvent supprimer des comptes")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Compte non trouvé",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Le compte avec l'ID spécifié n'existe pas")
+     *         )
+     *     )
+     * )
      */
-    public function destroy(string $id)
+    public function destroy(Request $request, Compte $compte): JsonResponse
     {
-        //
+        $user = $request->user();
+
+        // Vérifier que seul un administrateur peut supprimer un compte
+        if ($user->role !== 'admin') {
+            throw new UnauthorizedAccessException("Accès non autorisé - seuls les administrateurs peuvent supprimer des comptes.");
+        }
+
+        // Vérifier que le compte n'est pas déjà supprimé
+        if ($compte->trashed()) {
+            return $this->errorResponse(
+                'Le compte est déjà supprimé.',
+                400
+            );
+        }
+
+        return DB::transaction(function () use ($compte, $user) {
+            // Effectuer le soft delete
+            $compte->delete();
+
+            // Mettre à jour le statut à "ferme"
+            $compte->update(['statut' => 'ferme']);
+
+            Log::info('Compte supprimé (soft delete)', [
+                'compte_id' => $compte->id,
+                'numero_compte' => $compte->numero,
+                'user_id' => $user->id,
+                'deleted_at' => $compte->deleted_at,
+            ]);
+
+            return $this->successResponse([
+                'id' => $compte->id,
+                'numeroCompte' => $compte->numero,
+                'statut' => $compte->statut,
+                'dateFermeture' => $compte->deleted_at?->toISOString(),
+            ], 'Compte supprimé avec succès');
+        });
     }
 }
