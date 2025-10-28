@@ -513,11 +513,137 @@ class CompteController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
+     * @OA\Patch(
+     *     path="/api/v1/comptes/{compteId}",
+     *     summary="Mettre à jour partiellement un compte",
+     *     description="Permet aux clients de modifier leurs informations personnelles. Tous les champs sont optionnels mais au moins un doit être fourni.",
+     *     operationId="updateCompte",
+     *     tags={"Comptes"},
+     *     security={{"passport": {"write-comptes"}}},
+     *     @OA\Parameter(
+     *         name="compteId",
+     *         in="path",
+     *         description="ID du compte à modifier",
+     *         required=true,
+     *         @OA\Schema(type="string", format="uuid", example="550e8400-e29b-41d4-a716-446655440000")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="titulaire", type="string", example="Amadou Diallo Junior"),
+     *             @OA\Property(
+     *                 property="informationsClient",
+     *                 type="object",
+     *                 @OA\Property(property="telephone", type="string", example="+221771234568"),
+     *                 @OA\Property(property="email", type="string", format="email", example="nouveau.email@example.com"),
+     *                 @OA\Property(property="password", type="string", format="password", example="nouveauMotDePasse123"),
+     *                 @OA\Property(property="nci", type="string", example="1980123456789")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Compte mis à jour avec succès",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Compte mis à jour avec succès"),
+     *             @OA\Property(property="data", ref="#/components/schemas/Compte")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Données invalides ou aucun champ fourni",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Les données fournies sont invalides"),
+     *             @OA\Property(
+     *                 property="error",
+     *                 @OA\Property(property="code", type="string", example="VALIDATION_ERROR"),
+     *                 @OA\Property(property="message", type="string", example="Au moins un champ de modification doit être fourni")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Accès refusé - compte n'appartient pas à l'utilisateur",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Accès non autorisé")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Compte non trouvé",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Le compte avec l'ID spécifié n'existe pas")
+     *         )
+     *     )
+     * )
      */
-    public function update(Request $request, string $id)
+    public function update(UpdateCompteRequest $request, Compte $compte): JsonResponse
     {
-        //
+        $user = $request->user();
+
+        // Vérifier les permissions : seuls les propriétaires peuvent modifier
+        if ($user->role === 'client') {
+            $clientIds = $user->clients->pluck('id');
+            if (!in_array($compte->client_id, $clientIds->toArray())) {
+                throw new UnauthorizedAccessException("Vous n'avez pas accès à ce compte.");
+            }
+        }
+        // Les admins peuvent modifier tous les comptes
+
+        return DB::transaction(function () use ($request, $compte) {
+            $validated = $request->validated();
+
+            // Mise à jour du titulaire si fourni
+            if (isset($validated['titulaire'])) {
+                $compte->client->update([
+                    'nom' => $validated['titulaire'],
+                    'prenom' => '' // Peut être extrait si nécessaire
+                ]);
+            }
+
+            // Mise à jour des informations client si fournies
+            if (isset($validated['informationsClient'])) {
+                $clientUpdates = [];
+
+                if (isset($validated['informationsClient']['telephone'])) {
+                    $clientUpdates['telephone'] = $validated['informationsClient']['telephone'];
+                }
+
+                if (isset($validated['informationsClient']['email'])) {
+                    $clientUpdates['email'] = $validated['informationsClient']['email'];
+                }
+
+                if (isset($validated['informationsClient']['password'])) {
+                    $clientUpdates['password'] = bcrypt($validated['informationsClient']['password']);
+                }
+
+                if (isset($validated['informationsClient']['nci'])) {
+                    $clientUpdates['nci'] = $validated['informationsClient']['nci'];
+                }
+
+                if (!empty($clientUpdates)) {
+                    $compte->client->update($clientUpdates);
+                }
+            }
+
+            // Recharger le compte avec les relations mises à jour
+            $compte->load('client');
+
+            Log::info('Compte mis à jour', [
+                'compte_id' => $compte->id,
+                'user_id' => $user->id,
+                'champs_modifies' => array_keys($validated),
+            ]);
+
+            return $this->successResponse(
+                new CompteResource($compte),
+                'Compte mis à jour avec succès'
+            );
+        });
     }
 
     /**
