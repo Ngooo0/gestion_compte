@@ -21,6 +21,14 @@ class Compte extends Model
         'devise',
         'statut',
         'client_id',
+        'is_blocked',
+        'motif_blockage',
+        'date_debut_blockage',
+        'date_fin_blockage',
+        'motif_deblockage',
+        'date_deblockage',
+        'duree_blockage',
+        'unite_blockage',
     ];
 
     protected $casts = [
