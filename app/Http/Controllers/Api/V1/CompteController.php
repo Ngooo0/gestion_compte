@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Exceptions\CompteNotFoundException;
 use App\Exceptions\UnauthorizedAccessException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CompteResource;
@@ -9,6 +10,7 @@ use App\Models\Compte;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
 
 /**
@@ -19,6 +21,132 @@ use Illuminate\Http\JsonResponse;
 class CompteController extends Controller
 {
     use ApiResponseTrait;
+
+    /**
+     * @OA\Get(
+     *     path="/api/v1/comptes/{compteId}",
+     *     summary="Récupérer un compte spécifique",
+     *     description="Récupère les détails d'un compte spécifique selon les permissions de l'utilisateur. Recherche d'abord en local, puis en serverless si nécessaire.",
+     *     operationId="getCompte",
+     *     tags={"Comptes"},
+     *     security={{"passport": {"read-comptes"}}},
+     *     @OA\Parameter(
+     *         name="compteId",
+     *         in="path",
+     *         description="ID du compte à récupérer",
+     *         required=true,
+     *         @OA\Schema(type="string", format="uuid", example="550e8400-e29b-41d4-a716-446655440000")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Détails du compte récupérés avec succès",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Compte récupéré avec succès"),
+     *             @OA\Property(property="data", ref="#/components/schemas/Compte")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Compte non trouvé",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Le compte avec l'ID spécifié n'existe pas"),
+     *             @OA\Property(
+     *                 property="error",
+     *                 @OA\Property(property="code", type="string", example="COMPTE_NOT_FOUND"),
+     *                 @OA\Property(property="message", type="string", example="Le compte avec l'ID spécifié n'existe pas"),
+     *                 @OA\Property(
+     *                     property="details",
+     *                     @OA\Property(property="compteId", type="string", example="550e8400-e29b-41d4-a716-446655440000")
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Non authentifié",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Non authentifié")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Accès refusé",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Accès non autorisé")
+     *         )
+     *     )
+     * )
+     */
+    public function show(Compte $compte): JsonResponse
+    {
+        $user = $request->user();
+
+        // Vérifier les permissions selon le rôle
+        if ($user->role === 'client') {
+            // Les clients ne peuvent voir que leurs propres comptes
+            $clientIds = $user->clients->pluck('id');
+            if (!in_array($compte->client_id, $clientIds->toArray())) {
+                throw new UnauthorizedAccessException("Vous n'avez pas accès à ce compte.");
+            }
+        }
+        // Les admins peuvent voir tous les comptes
+
+        // Stratégie de recherche : local par défaut, serverless si nécessaire
+        $compteData = null;
+        $searchSource = 'local';
+
+        // Recherche en local d'abord (comptes chèque ou épargne actifs)
+        if ($compte->type === 'cheque' || ($compte->type === 'epargne' && $compte->statut === 'actif')) {
+            $compteData = $compte;
+        } else {
+            // Recherche en serverless (simulée pour les comptes épargne archivés)
+            $compteData = $this->searchInServerless($compte->id);
+            $searchSource = 'serverless';
+        }
+
+        if (!$compteData) {
+            throw new CompteNotFoundException($compte->id);
+        }
+
+        // Log de la stratégie de recherche utilisée
+        Log::info('Recherche de compte effectuée', [
+            'compte_id' => $compte->id,
+            'user_id' => $user->id,
+            'search_source' => $searchSource,
+            'compte_type' => $compte->type,
+            'compte_statut' => $compte->statut,
+        ]);
+
+        return $this->successResponse(
+            new CompteResource($compteData),
+            'Compte récupéré avec succès'
+        );
+    }
+
+    /**
+     * Recherche en serverless (simulée pour les comptes archivés)
+     *
+     * @param string $compteId
+     * @return Compte|null
+     */
+    private function searchInServerless(string $compteId): ?Compte
+    {
+        // Simulation de recherche serverless
+        // En production, ceci ferait appel à une API serverless (AWS Lambda, etc.)
+        Log::info('Recherche serverless simulée', [
+            'compte_id' => $compteId,
+            'service' => 'AWS_Lambda',
+            'endpoint' => 'https://lambda.us-east-1.amazonaws.com/accounts/search'
+        ]);
+
+        // Pour la simulation, on retourne le compte s'il existe
+        // En réalité, ceci contacterait un service externe
+        return Compte::find($compteId);
+    }
 
     /**
      * @OA\Get(
@@ -205,7 +333,7 @@ class CompteController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function showOld(string $id)
     {
         //
     }
