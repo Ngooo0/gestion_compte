@@ -18,9 +18,9 @@ services:
       - key: DB_CONNECTION
         value: pgsql
       - key: DB_HOST
-        value: centerbeam.proxy.rlwy.net
+        value: postgres.railway.internal
       - key: DB_PORT
-        value: 46902
+        value: 5432
       - key: DB_DATABASE
         value: railway
       - key: DB_USERNAME
