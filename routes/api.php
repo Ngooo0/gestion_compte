@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CompteController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -32,6 +33,20 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
     /*
     |--------------------------------------------------------------------------
+    | Authentification Routes
+    |--------------------------------------------------------------------------
+    |
+    | Routes publiques pour l'authentification OAuth2
+    |
+    */
+    Route::prefix('auth')->name('auth.')->group(function () {
+        Route::post('/login', [AuthController::class, 'login'])->name('login');
+        Route::post('/refresh', [AuthController::class, 'refresh'])->name('refresh');
+        Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+    });
+
+    /*
+    |--------------------------------------------------------------------------
     | Comptes Routes
     |--------------------------------------------------------------------------
     |
@@ -40,7 +55,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     | - Client : accès uniquement à ses comptes
     |
     */
-    Route::middleware(['auth:api', 'rating', 'cloud.archive'])->group(function () {
+    Route::middleware(['auth:api', 'api.logging'])->group(function () {
 
         /**
          * @group Comptes

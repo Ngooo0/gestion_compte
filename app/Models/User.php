@@ -54,4 +54,20 @@ class User extends Authenticatable
     {
         return $this->hasMany(Client::class);
     }
+
+    /**
+     * Trouve l'utilisateur par email pour Passport
+     */
+    public function findForPassport(string $username)
+    {
+        return $this->where('email', $username)->first();
+    }
+
+    /**
+     * Valide le mot de passe pour Passport
+     */
+    public function validateForPassportPasswordGrant(string $password): bool
+    {
+        return $this->hasher->check($password, $this->password);
+    }
 }
