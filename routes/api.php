@@ -57,6 +57,15 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('/comptes', [CompteController::class, 'index'])
             ->name('comptes.index');
 
+        /**
+         * @group Comptes
+         * @description Récupérer un compte spécifique par ID (Admin voit tous, Client voit les siens)
+         * @urlParam compte string required ID du compte Example: 550e8400-e29b-41d4-a716-446655440000
+         * @responseFile responses/comptes/show.json
+         */
+        Route::get('/comptes/{compte}', [CompteController::class, 'show'])
+            ->name('comptes.show');
+
     });
 
 });
