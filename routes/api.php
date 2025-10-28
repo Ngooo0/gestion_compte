@@ -100,6 +100,28 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
         /**
          * @group Comptes
+         * @description Bloquer un compte épargne (administrateur uniquement)
+         * @urlParam compte string required ID du compte Example: 550e8400-e29b-41d4-a716-446655440000
+         * @bodyParam motif string required Motif de blocage Example: Activité suspecte détectée
+         * @bodyParam duree integer required Durée de blocage Example: 30
+         * @bodyParam unite string required Unité de temps (jours, semaines, mois) Example: mois
+         * @responseFile responses/comptes/bloquer.json
+         */
+        Route::post('/comptes/{compte}/bloquer', [CompteController::class, 'bloquer'])
+            ->name('comptes.bloquer');
+
+        /**
+         * @group Comptes
+         * @description Débloquer un compte épargne (administrateur uniquement)
+         * @urlParam compte string required ID du compte Example: 550e8400-e29b-41d4-a716-446655440000
+         * @bodyParam motif string required Motif de déblocage Example: Vérification complétée
+         * @responseFile responses/comptes/debloquer.json
+         */
+        Route::post('/comptes/{compte}/debloquer', [CompteController::class, 'debloquer'])
+            ->name('comptes.debloquer');
+
+        /**
+         * @group Comptes
          * @description Supprimer un compte (soft delete - administrateur uniquement)
          * @urlParam compte string required ID du compte Example: 550e8400-e29b-41d4-a716-446655440000
          * @responseFile responses/comptes/delete.json
