@@ -24,6 +24,7 @@ class User extends Authenticatable
         'password',
         'role',
         'is_active',
+        'client_id', // Pour lier un user client à un client spécifique
     ];
 
     /**
@@ -47,12 +48,20 @@ class User extends Authenticatable
         'is_active' => 'boolean',
     ];
 
-    public $incrementing = false;
-    protected $keyType = 'string';
+    public $incrementing = true;
+    protected $keyType = 'int';
 
     public function clients(): HasMany
     {
         return $this->hasMany(Client::class);
+    }
+
+    /**
+     * Relation pour les utilisateurs clients (lié à un client spécifique)
+     */
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
     }
 
     /**

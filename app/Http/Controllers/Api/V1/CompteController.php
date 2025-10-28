@@ -87,15 +87,14 @@ class CompteController extends Controller
      *     )
      * )
      */
-    public function show(Compte $compte): JsonResponse
+    public function show(Request $request, Compte $compte): JsonResponse
     {
         $user = $request->user();
 
         // Vérifier les permissions selon le rôle
         if ($user->role === 'client') {
-            // Les clients ne peuvent voir que leurs propres comptes
-            $clientIds = $user->clients->pluck('id');
-            if (!in_array($compte->client_id, $clientIds->toArray())) {
+            // Les utilisateurs clients ne peuvent voir que leurs propres comptes
+            if ($compte->client_id !== $user->client_id) {
                 throw new UnauthorizedAccessException("Vous n'avez pas accès à ce compte.");
             }
         }
@@ -277,9 +276,10 @@ class CompteController extends Controller
 
         // Filtrage selon le rôle de l'utilisateur
         if ($user->role === 'client') {
-            // Les clients ne voient que leurs comptes
-            $clientIds = $user->clients->pluck('id');
-            $query->whereIn('client_id', $clientIds);
+            // Les utilisateurs clients ne voient que leurs comptes actifs (non supprimés et non bloqués)
+            $query->where('client_id', $user->client_id)
+                  ->where('statut', '!=', 'bloque')
+                  ->whereNull('deleted_at'); // Exclure les comptes supprimés (soft delete)
         }
         // Les admins voient tous les comptes (pas de filtrage supplémentaire)
 
@@ -587,8 +587,8 @@ class CompteController extends Controller
 
         // Vérifier les permissions : seuls les propriétaires peuvent modifier
         if ($user->role === 'client') {
-            $clientIds = $user->clients->pluck('id');
-            if (!in_array($compte->client_id, $clientIds->toArray())) {
+            // Les utilisateurs clients ne peuvent modifier que leurs propres comptes
+            if ($compte->client_id !== $user->client_id) {
                 throw new UnauthorizedAccessException("Vous n'avez pas accès à ce compte.");
             }
         }
@@ -720,6 +720,14 @@ class CompteController extends Controller
             throw new UnauthorizedAccessException("Accès non autorisé - seuls les administrateurs peuvent bloquer des comptes.");
         }
 
+        // Vérifier que seul les comptes épargne peuvent être bloqués
+        if ($compte->type !== 'epargne') {
+            return $this->errorResponse(
+                'Seuls les comptes épargne peuvent être bloqués.',
+                400
+            );
+        }
+
         return DB::transaction(function () use ($request, $compte, $user) {
             $validated = $request->validated();
 
@@ -827,6 +835,14 @@ class CompteController extends Controller
         // Vérifier les permissions : seuls les admins peuvent débloquer
         if ($user->role !== 'admin') {
             throw new UnauthorizedAccessException("Accès non autorisé - seuls les administrateurs peuvent débloquer des comptes.");
+        }
+
+        // Vérifier que seul les comptes épargne peuvent être débloqués
+        if ($compte->type !== 'epargne') {
+            return $this->errorResponse(
+                'Seuls les comptes épargne peuvent être débloqués.',
+                400
+            );
         }
 
         return DB::transaction(function () use ($request, $compte, $user) {

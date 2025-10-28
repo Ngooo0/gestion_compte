@@ -17,7 +17,6 @@ class Compte extends Model
     protected $fillable = [
         'numero',
         'type',
-        'solde',
         'devise',
         'statut',
         'client_id',
@@ -32,7 +31,9 @@ class Compte extends Model
     ];
 
     protected $casts = [
-        'solde' => 'decimal:2',
+        'date_debut_blockage' => 'datetime',
+        'date_fin_blockage' => 'datetime',
+        'date_deblockage' => 'datetime',
     ];
 
     public $incrementing = false;
@@ -93,16 +94,34 @@ class Compte extends Model
     /**
      * Attribut solde calculé : Somme des dépôts - Somme des retraits
      */
-    public function getSoldeCalculeAttribute(): float
+    public function getSoldeAttribute(): float
     {
         $debits = $this->transactions()
             ->where('type', 'depot')
+            ->where('statut', 'validee')
             ->sum('montant');
 
         $credits = $this->transactions()
             ->where('type', 'retrait')
+            ->where('statut', 'validee')
             ->sum('montant');
 
         return $debits - $credits;
+    }
+
+    /**
+     * Vérifier la disponibilité du solde pour un retrait
+     */
+    public function hasAvailableBalance(float $amount): bool
+    {
+        return $this->solde >= $amount;
+    }
+
+    /**
+     * Vérifier si le compte est actif et non bloqué
+     */
+    public function isActive(): bool
+    {
+        return $this->statut === 'actif' && !$this->is_blocked;
     }
 }

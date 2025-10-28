@@ -78,6 +78,22 @@ return [
             'sslmode' => 'prefer',
         ],
 
+        // Base de données Railway (production)
+        'railway' => [
+            'driver' => 'pgsql',
+            'url' => env('DATABASE_URL'),
+            'host' => env('PGHOST', env('DB_HOST', '127.0.0.1')),
+            'port' => env('PGPORT', env('DB_PORT', '5432')),
+            'database' => env('PGDATABASE', env('DB_DATABASE', 'forge')),
+            'username' => env('PGUSER', env('DB_USERNAME', 'forge')),
+            'password' => env('PGPASSWORD', env('DB_PASSWORD', '')),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => 'require',
+        ],
+
         'sqlsrv' => [
             'driver' => 'sqlsrv',
             'url' => env('DATABASE_URL'),

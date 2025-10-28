@@ -84,17 +84,15 @@ class AuthController extends Controller
                 'user_agent' => $request->userAgent(),
             ]);
 
-            throw ValidationException::withMessages([
-                'email' => ['Les identifiants fournis sont incorrects.'],
-            ]);
+            return $this->errorResponse('Les identifiants fournis sont incorrects.', 422);
         }
 
         // Créer le token d'accès avec scopes basés sur le rôle
         $scopes = $this->getScopesForRole($user->role);
-        $token = $user->createToken('API Access', $scopes);
+        $token = $user->createToken('API Access');
 
         // Créer le refresh token
-        $refreshToken = $user->createToken('Refresh Token', ['refresh-token']);
+        $refreshToken = $user->createToken('Refresh Token');
 
         // Stocker les tokens dans les cookies
         $accessCookie = Cookie::make('access_token', $token->accessToken, 60, null, null, true, true); // 1 heure
@@ -159,7 +157,7 @@ class AuthController extends Controller
 
         // Créer un nouveau token d'accès
         $scopes = $this->getScopesForRole($user->role);
-        $token = $user->createToken('API Access', $scopes);
+        $token = $user->createToken('API Access');
 
         // Stocker le nouveau token dans les cookies
         $accessCookie = Cookie::make('access_token', $token->accessToken, 60, null, null, true, true);
@@ -238,16 +236,10 @@ class AuthController extends Controller
             'admin' => [
                 'read-comptes',
                 'write-comptes',
-                'read-transactions',
-                'write-transactions',
-                'read-clients',
-                'write-clients',
-                'admin-access',
+                'admin',
             ],
             'client' => [
                 'read-comptes',
-                'read-transactions',
-                'read-clients',
             ],
             default => [],
         };

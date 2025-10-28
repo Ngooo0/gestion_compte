@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gestion-compte-app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+    ports:
+      - "8000:80"
+    environment:
+      - APP_NAME=Gestion de Comptes
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - APP_URL=http://localhost:8000
+      - DB_CONNECTION=pgsql
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_DATABASE=${DB_DATABASE}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - CACHE_DRIVER=file
+      - QUEUE_CONNECTION=sync
+      - SESSION_DRIVER=file
+      - LOG_CHANNEL=stack
+      - L5_SWAGGER_GENERATE_ALWAYS=false
+      - L5_SWAGGER_BASE_PATH=http://localhost:8000
+      - L5_SWAGGER_CONST_HOST=http://localhost:8000
+    networks:
+      - gestion-compte-network
+
+
+networks:
+  gestion-compte-network:
+    driver: bridge

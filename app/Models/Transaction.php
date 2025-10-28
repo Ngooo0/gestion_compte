@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Observers\TransactionObserver;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,6 +11,14 @@ use Illuminate\Support\Str;
 class Transaction extends Model
 {
     use HasFactory;
+
+    /**
+     * Boot the model and register the observer
+     */
+    protected static function booted(): void
+    {
+        static::observe(TransactionObserver::class);
+    }
 
     protected $fillable = [
         'reference',

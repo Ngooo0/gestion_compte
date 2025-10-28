@@ -29,8 +29,7 @@ class AuthTest extends TestCase
         ]);
 
         // Créer un utilisateur de test
-        User::create([
-            'id' => $this->faker->uuid(),
+        User::factory()->create([
             'name' => 'Test User',
             'email' => 'test@example.com',
             'password' => Hash::make('password'),
@@ -195,8 +194,7 @@ class AuthTest extends TestCase
         ]);
 
         // Créer un utilisateur client
-        User::create([
-            'id' => $this->faker->uuid(),
+        User::factory()->create([
             'name' => 'Client User',
             'email' => 'client@example.com',
             'password' => Hash::make('password'),

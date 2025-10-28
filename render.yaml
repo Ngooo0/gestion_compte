@@ -1,0 +1,54 @@
+services:
+  - type: web
+    name: gestion-compte-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile.render
+    envVars:
+      - key: APP_NAME
+        value: Gestion de Comptes
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_URL
+        fromService:
+          type: web
+          name: gestion-compte-api
+          property: host
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        value: centerbeam.proxy.rlwy.net
+      - key: DB_PORT
+        value: 46902
+      - key: DB_DATABASE
+        value: railway
+      - key: DB_USERNAME
+        value: postgres
+      - key: DB_PASSWORD
+        value: wiyfClRsnOvuqaNLvNpCqLrIWgcEPISI
+      - key: CACHE_DRIVER
+        value: file
+      - key: QUEUE_CONNECTION
+        value: sync
+      - key: SESSION_DRIVER
+        value: file
+      - key: LOG_CHANNEL
+        value: stack
+      - key: L5_SWAGGER_GENERATE_ALWAYS
+        value: false
+      - key: L5_SWAGGER_BASE_PATH
+        fromService:
+          type: web
+          name: gestion-compte-api
+          property: host
+      - key: L5_SWAGGER_CONST_HOST
+        fromService:
+          type: web
+          name: gestion-compte-api
+          property: host
+    healthCheckPath: /api/v1/auth/login
+    disk:
+      name: laravel-storage
+      mountPath: /var/www/html/storage
+      sizeGB: 1
