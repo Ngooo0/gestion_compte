@@ -647,6 +647,236 @@ class CompteController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/api/v1/comptes/{compteId}/bloquer",
+     *     summary="Bloquer un compte épargne",
+     *     description="Bloque un compte épargne actif pour une durée déterminée. Seuls les comptes épargne actifs peuvent être bloqués.",
+     *     operationId="bloquerCompte",
+     *     tags={"Comptes"},
+     *     security={{"passport": {"write-comptes"}}},
+     *     @OA\Parameter(
+     *         name="compteId",
+     *         in="path",
+     *         description="ID du compte à bloquer",
+     *         required=true,
+     *         @OA\Schema(type="string", format="uuid", example="550e8400-e29b-41d4-a716-446655440000")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"motif", "duree", "unite"},
+     *             @OA\Property(property="motif", type="string", example="Activité suspecte détectée"),
+     *             @OA\Property(property="duree", type="integer", minimum=1, maximum=365, example=30),
+     *             @OA\Property(property="unite", type="string", enum={"jours", "semaines", "mois"}, example="mois")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Compte bloqué avec succès",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Compte bloqué avec succès"),
+     *             @OA\Property(property="data", type="object",
+     *                 @OA\Property(property="id", type="string", format="uuid", example="550e8400-e29b-41d4-a716-446655440000"),
+     *                 @OA\Property(property="statut", type="string", example="bloque"),
+     *                 @OA\Property(property="motifBlocage", type="string", example="Activité suspecte détectée"),
+     *                 @OA\Property(property="dateBlocage", type="string", format="date-time", example="2025-10-19T11:20:00Z"),
+     *                 @OA\Property(property="dateDeblocagePrevue", type="string", format="date-time", example="2025-11-18T11:20:00Z")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Données invalides ou compte ne peut pas être bloqué",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Les données fournies sont invalides")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Accès refusé",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Accès non autorisé")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Compte non trouvé",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Le compte avec l'ID spécifié n'existe pas")
+     *         )
+     *     )
+     * )
+     */
+    public function bloquer(BloquerCompteRequest $request, Compte $compte): JsonResponse
+    {
+        $user = $request->user();
+
+        // Vérifier les permissions : seuls les admins peuvent bloquer
+        if ($user->role !== 'admin') {
+            throw new UnauthorizedAccessException("Accès non autorisé - seuls les administrateurs peuvent bloquer des comptes.");
+        }
+
+        return DB::transaction(function () use ($request, $compte, $user) {
+            $validated = $request->validated();
+
+            // Calculer la date de fin de blocage
+            $dateDebut = now();
+            $dateFin = $this->calculerDateFinBlocage($dateDebut, $validated['duree'], $validated['unite']);
+
+            // Bloquer le compte
+            $compte->update([
+                'is_blocked' => true,
+                'statut' => 'bloque',
+                'motif_blockage' => $validated['motif'],
+                'date_debut_blockage' => $dateDebut,
+                'date_fin_blockage' => $dateFin,
+                'duree_blockage' => $validated['duree'],
+                'unite_blockage' => $validated['unite'],
+            ]);
+
+            Log::info('Compte bloqué', [
+                'compte_id' => $compte->id,
+                'numero_compte' => $compte->numero,
+                'user_id' => $user->id,
+                'motif' => $validated['motif'],
+                'duree' => $validated['duree'],
+                'unite' => $validated['unite'],
+                'date_debut' => $dateDebut,
+                'date_fin' => $dateFin,
+            ]);
+
+            return $this->successResponse([
+                'id' => $compte->id,
+                'statut' => $compte->statut,
+                'motifBlocage' => $compte->motif_blockage,
+                'dateBlocage' => $compte->date_debut_blockage?->toISOString(),
+                'dateDeblocagePrevue' => $compte->date_fin_blockage?->toISOString(),
+            ], 'Compte bloqué avec succès');
+        });
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/v1/comptes/{compteId}/debloquer",
+     *     summary="Débloquer un compte épargne",
+     *     description="Débloque un compte épargne bloqué. Le compte retrouve son statut actif.",
+     *     operationId="debloquerCompte",
+     *     tags={"Comptes"},
+     *     security={{"passport": {"write-comptes"}}},
+     *     @OA\Parameter(
+     *         name="compteId",
+     *         in="path",
+     *         description="ID du compte à débloquer",
+     *         required=true,
+     *         @OA\Schema(type="string", format="uuid", example="550e8400-e29b-41d4-a716-446655440000")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"motif"},
+     *             @OA\Property(property="motif", type="string", example="Vérification complétée")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Compte débloqué avec succès",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Compte débloqué avec succès"),
+     *             @OA\Property(property="data", type="object",
+     *                 @OA\Property(property="id", type="string", format="uuid", example="550e8400-e29b-41d4-a716-446655440000"),
+     *                 @OA\Property(property="statut", type="string", example="actif"),
+     *                 @OA\Property(property="dateDeblocage", type="string", format="date-time", example="2025-10-19T12:00:00Z")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Données invalides ou compte ne peut pas être débloqué",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Les données fournies sont invalides")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Accès refusé",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Accès non autorisé")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Compte non trouvé",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Le compte avec l'ID spécifié n'existe pas")
+     *         )
+     *     )
+     * )
+     */
+    public function debloquer(DebloquerCompteRequest $request, Compte $compte): JsonResponse
+    {
+        $user = $request->user();
+
+        // Vérifier les permissions : seuls les admins peuvent débloquer
+        if ($user->role !== 'admin') {
+            throw new UnauthorizedAccessException("Accès non autorisé - seuls les administrateurs peuvent débloquer des comptes.");
+        }
+
+        return DB::transaction(function () use ($request, $compte, $user) {
+            $validated = $request->validated();
+
+            $dateDeblocage = now();
+
+            // Débloquer le compte
+            $compte->update([
+                'is_blocked' => false,
+                'statut' => 'actif',
+                'motif_deblockage' => $validated['motif'],
+                'date_deblockage' => $dateDeblocage,
+            ]);
+
+            Log::info('Compte débloqué', [
+                'compte_id' => $compte->id,
+                'numero_compte' => $compte->numero,
+                'user_id' => $user->id,
+                'motif_deblockage' => $validated['motif'],
+                'date_deblockage' => $dateDeblocage,
+            ]);
+
+            return $this->successResponse([
+                'id' => $compte->id,
+                'statut' => $compte->statut,
+                'dateDeblocage' => $compte->date_deblockage?->toISOString(),
+            ], 'Compte débloqué avec succès');
+        });
+    }
+
+    /**
+     * Calcule la date de fin de blocage selon la durée et l'unité
+     *
+     * @param \Carbon\Carbon $dateDebut
+     * @param int $duree
+     * @param string $unite
+     * @return \Carbon\Carbon
+     */
+    private function calculerDateFinBlocage(\Carbon\Carbon $dateDebut, int $duree, string $unite): \Carbon\Carbon
+    {
+        return match ($unite) {
+            'jours' => $dateDebut->copy()->addDays($duree),
+            'semaines' => $dateDebut->copy()->addWeeks($duree),
+            'mois' => $dateDebut->copy()->addMonths($duree),
+            default => $dateDebut->copy()->addDays($duree),
+        };
+    }
+
+    /**
      * @OA\Delete(
      *     path="/api/v1/comptes/{compteId}",
      *     summary="Supprimer un compte (soft delete)",
