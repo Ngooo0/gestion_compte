@@ -10,6 +10,7 @@ use App\Traits\ApiResponseTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
+
 /**
  * @group Comptes
  *
@@ -20,26 +21,108 @@ class CompteController extends Controller
     use ApiResponseTrait;
 
     /**
-     * Lister tous les comptes
-     *
-     * Récupère la liste paginée des comptes selon les permissions de l'utilisateur.
-     * - Admin : voit tous les comptes
-     * - Client : voit uniquement ses comptes
-     *
-     * @queryParam page int Numéro de page (default: 1)
-     * @queryParam limit int Nombre d'éléments par page (default: 10, max: 100)
-     * @queryParam type string Filtrer par type (epargne, cheque)
-     * @queryParam statut string Filtrer par statut (actif, bloque, ferme)
-     * @queryParam search string Recherche par titulaire ou numéro
-     * @queryParam sort string Tri (dateCreation, solde, titulaire)
-     * @queryParam order string Ordre (asc, desc)
-     *
-     * @response 200 {
-     *   "success": true,
-     *   "data": [...],
-     *   "pagination": {...},
-     *   "links": {...}
-     * }
+     * @OA\Get(
+     *     path="/api/v1/comptes",
+     *     summary="Lister tous les comptes",
+     *     description="Récupère la liste paginée des comptes selon les permissions de l'utilisateur. Admin voit tous les comptes, Client voit uniquement ses comptes.",
+     *     operationId="getComptes",
+     *     tags={"Comptes"},
+     *     security={{"passport": {"read-comptes"}}},
+     *     @OA\Parameter(
+     *         name="page",
+     *         in="query",
+     *         description="Numéro de page",
+     *         required=false,
+     *         @OA\Schema(type="integer", default=1, minimum=1)
+     *     ),
+     *     @OA\Parameter(
+     *         name="limit",
+     *         in="query",
+     *         description="Nombre d'éléments par page",
+     *         required=false,
+     *         @OA\Schema(type="integer", default=10, minimum=1, maximum=100)
+     *     ),
+     *     @OA\Parameter(
+     *         name="type",
+     *         in="query",
+     *         description="Filtrer par type",
+     *         required=false,
+     *         @OA\Schema(type="string", enum={"epargne", "cheque"})
+     *     ),
+     *     @OA\Parameter(
+     *         name="statut",
+     *         in="query",
+     *         description="Filtrer par statut",
+     *         required=false,
+     *         @OA\Schema(type="string", enum={"actif", "bloque", "ferme"})
+     *     ),
+     *     @OA\Parameter(
+     *         name="search",
+     *         in="query",
+     *         description="Recherche par titulaire ou numéro",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="sort",
+     *         in="query",
+     *         description="Tri",
+     *         required=false,
+     *         @OA\Schema(type="string", enum={"dateCreation", "solde", "titulaire"})
+     *     ),
+     *     @OA\Parameter(
+     *         name="order",
+     *         in="query",
+     *         description="Ordre",
+     *         required=false,
+     *         @OA\Schema(type="string", enum={"asc", "desc"})
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Liste des comptes récupérée avec succès",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Comptes récupérés avec succès"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="array",
+     *                 @OA\Items(ref="#/components/schemas/Compte")
+     *             ),
+     *             @OA\Property(
+     *                 property="pagination",
+     *                 @OA\Property(property="currentPage", type="integer", example=1),
+     *                 @OA\Property(property="totalPages", type="integer", example=3),
+     *                 @OA\Property(property="totalItems", type="integer", example=25),
+     *                 @OA\Property(property="itemsPerPage", type="integer", example=10),
+     *                 @OA\Property(property="hasNext", type="boolean", example=true),
+     *                 @OA\Property(property="hasPrevious", type="boolean", example=false)
+     *             ),
+     *             @OA\Property(
+     *                 property="links",
+     *                 @OA\Property(property="self", type="string", example="/api/v1/comptes?page=1&limit=10"),
+     *                 @OA\Property(property="next", type="string", example="/api/v1/comptes?page=2&limit=10"),
+     *                 @OA\Property(property="first", type="string", example="/api/v1/comptes?page=1&limit=10"),
+     *                 @OA\Property(property="last", type="string", example="/api/v1/comptes?page=3&limit=10")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Non authentifié",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Non authentifié")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Accès refusé",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Accès non autorisé")
+     *         )
+     *     )
+     * )
      */
     public function index(Request $request): JsonResponse
     {
