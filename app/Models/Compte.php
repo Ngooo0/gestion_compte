@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 
 class Compte extends Model
@@ -50,5 +51,33 @@ class Compte extends Model
     public function transactionsEntrantes(): HasMany
     {
         return $this->hasMany(Transaction::class, 'compte_destination_id');
+    }
+
+    /**
+     * Scope global pour récupérer uniquement les comptes actifs (non supprimés)
+     */
+    protected static function booted()
+    {
+        static::addGlobalScope('active', function (Builder $builder) {
+            $builder->where('statut', '!=', 'ferme');
+        });
+    }
+
+    /**
+     * Scope local pour récupérer un compte par numéro
+     */
+    public function scopeNumero(Builder $query, string $numero): Builder
+    {
+        return $query->where('numero', $numero);
+    }
+
+    /**
+     * Scope local pour récupérer les comptes d'un client basé sur son téléphone
+     */
+    public function scopeClient(Builder $query, string $telephone): Builder
+    {
+        return $query->whereHas('client', function (Builder $q) use ($telephone) {
+            $q->where('telephone', $telephone);
+        });
     }
 }
