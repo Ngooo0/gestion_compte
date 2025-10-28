@@ -1,5 +1,5 @@
 # Dockerfile optimisé pour Render
-FROM php:8.2-apache
+FROM php:8.3-apache
 
 # Installer les extensions PHP nécessaires pour PostgreSQL
 RUN apt-get update && apt-get install -y \
