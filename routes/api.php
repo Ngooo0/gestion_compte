@@ -98,6 +98,15 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::patch('/comptes/{compte}', [CompteController::class, 'update'])
             ->name('comptes.update');
 
+        /**
+         * @group Comptes
+         * @description Supprimer un compte (soft delete - administrateur uniquement)
+         * @urlParam compte string required ID du compte Example: 550e8400-e29b-41d4-a716-446655440000
+         * @responseFile responses/comptes/delete.json
+         */
+        Route::delete('/comptes/{compte}', [CompteController::class, 'destroy'])
+            ->name('comptes.destroy');
+
     });
 
 });
