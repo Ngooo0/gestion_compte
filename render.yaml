@@ -1,11 +1,16 @@
 services:
+  # Service Web principal - API Laravel
   - type: web
     name: gestion-compte-api
-    runtime: docker
+    env: docker
     dockerfilePath: ./Dockerfile.render
+    region: frankfurt  # ou choisir parmi: oregon, ohio, singapore
+    plan: starter      # ou choisir: starter-plus, standard, etc.
+    healthCheckPath: /api/v1/auth/login
+    numInstances: 1
     envVars:
       - key: APP_NAME
-        value: Gestion de Comptes
+        value: "Gestion de Comptes"
       - key: APP_ENV
         value: production
       - key: APP_DEBUG
@@ -15,40 +20,105 @@ services:
           type: web
           name: gestion-compte-api
           property: host
+      # Base de données Railway
       - key: DB_CONNECTION
         value: pgsql
       - key: DB_HOST
         value: postgres.railway.internal
       - key: DB_PORT
-        value: 5432
+        value: "5432"
       - key: DB_DATABASE
         value: railway
       - key: DB_USERNAME
         value: postgres
+      - key: DATABASE_URL
+        sync: false  # ne pas exposer en clair - à définir dans l'interface Render
+      - key: DATABASE_PUBLIC_URL
+        sync: false  # ne pas exposer en clair - à définir dans l'interface Render
       - key: DB_PASSWORD
-        value: wiyfClRsnOvuqaNLvNpCqLrIWgcEPISI
+        sync: false  # ne pas exposer en clair - à définir dans l'interface Render
+      - key: PGHOST
+        value: postgres.railway.internal
+      - key: PGPORT
+        value: "5432"
+      - key: PGDATABASE
+        value: railway
+      - key: PGUSER
+        value: postgres
+      - key: PGPASSWORD
+        sync: false  # ne pas exposer en clair - à définir dans l'interface Render
+      - key: DB_SSLMODE
+        value: require
+      # Laravel et autres configs
+      - key: APP_KEY
+        sync: false  # générer avec php artisan key:generate --show
       - key: CACHE_DRIVER
         value: file
-      - key: QUEUE_CONNECTION
-        value: sync
       - key: SESSION_DRIVER
         value: file
+      - key: QUEUE_CONNECTION
+        value: database  # ou sync si pas besoin de queues
       - key: LOG_CHANNEL
         value: stack
-      - key: L5_SWAGGER_GENERATE_ALWAYS
-        value: false
-      - key: L5_SWAGGER_BASE_PATH
-        fromService:
-          type: web
-          name: gestion-compte-api
-          property: host
-      - key: L5_SWAGGER_CONST_HOST
-        fromService:
-          type: web
-          name: gestion-compte-api
-          property: host
-    healthCheckPath: /api/v1/auth/login
+      - key: LOG_LEVEL
+        value: error
     disk:
-      name: laravel-storage
+      name: gestion-compte-storage
       mountPath: /var/www/html/storage
-      sizeGB: 1
+      sizeGB: 1  # ajuster selon besoins
+
+  # Worker optionnel pour les queues Laravel
+  - type: worker
+    name: gestion-compte-worker
+    env: docker
+    dockerfilePath: ./Dockerfile.render
+    region: frankfurt  # même région que le web service
+    plan: starter
+    numInstances: 1
+    command: php artisan queue:work --sleep=3 --tries=3 --queue=default
+    envVars:
+      - fromService:
+          type: web
+          name: gestion-compte-api
+          envVarKeys:
+            - APP_KEY
+            - DB_CONNECTION
+            - DB_HOST
+            - DB_PORT
+            - DB_DATABASE
+            - DB_USERNAME
+            - DB_PASSWORD
+            - DATABASE_URL
+            - PGHOST
+            - PGPORT
+            - PGDATABASE
+            - PGUSER
+            - PGPASSWORD
+
+# Cron Job optionnel pour le scheduler Laravel
+  - type: cron
+    name: gestion-compte-scheduler
+    env: docker
+    dockerfilePath: ./Dockerfile.render
+    region: frankfurt
+    plan: starter
+    schedule: "* * * * *"  # toutes les minutes
+    command: php artisan schedule:run
+    envVars:
+      - fromService:
+          type: web
+          name: gestion-compte-api
+          envVarKeys:
+            - APP_KEY
+            - DB_CONNECTION
+            - DB_HOST
+            - DB_PORT
+            - DB_DATABASE
+            - DB_USERNAME
+            - DB_PASSWORD
+            - DATABASE_URL
+            - PGHOST
+            - PGPORT
+            - PGDATABASE
+            - PGUSER
+            - PGPASSWORD
