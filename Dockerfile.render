@@ -26,7 +26,10 @@ RUN apt-get update && apt-get install -y \
         && docker-php-ext-install pdo pdo_pgsql
 
 # Créer un utilisateur non-root
-RUN addgroup -g 1000 laravel && adduser -G laravel -g laravel -s /bin/sh -D laravel
+# Créer le groupe et l'utilisateur non-root
+RUN groupadd -g 1000 laravel && \
+    useradd -u 1000 -g laravel -m -s /bin/bash laravel
+
 
 # Définir le répertoire de travail
 WORKDIR /var/www/html
