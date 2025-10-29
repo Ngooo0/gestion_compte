@@ -2,6 +2,7 @@ services:
   - type: web
     name: gestion-compte-api
     env: docker
+    # Remplace <dockerhub_user> par ton nom d'utilisateur Docker Hub ou GHCR image path
     dockerImage: docker.io/<dockerhub_user>/gestion_compte:latest
     region: frankfurt
     plan: starter
@@ -12,4 +13,59 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
-      # ... autres vars (DB_*, PG*) ...
+      - key: DATABASE_PUBLIC_URL
+        sync: false
+      - key: DB_HOST
+        value: postgres.railway.internal
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_DATABASE
+        value: railway
+      - key: DB_USERNAME
+        value: postgres
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_SSLMODE
+        value: require
+      # Les secrets (APP_KEY, DATABASE_URL, DB_PASSWORD, PGPASSWORD) sont marqués sync: false
+      # Remplace les placeholders dans l'UI Render ou via la CLI/console avec des valeurs réelles.
+    disk:
+      name: gestion-compte-storage
+      mountPath: /var/www/html/storage
+      sizeGB: 1
+
+  # Worker optionnel
+  - type: worker
+    name: gestion-compte-worker
+    env: docker
+    dockerImage: docker.io/<dockerhub_user>/gestion_compte:latest
+    region: frankfurt
+    plan: starter
+    numInstances: 1
+    command: php artisan queue:work --sleep=3 --tries=3 --queue=default
+    envVars:
+      - fromService:
+          type: web
+          name: gestion-compte-api
+          envVarKeys:
+            - APP_KEY
+            - DATABASE_URL
+            - DB_PASSWORD
+
+  # Cron Job optionnel pour le scheduler Laravel
+  - type: cron
+    name: gestion-compte-scheduler
+    env: docker
+    dockerImage: docker.io/<dockerhub_user>/gestion_compte:latest
+    region: frankfurt
+    plan: starter
+    schedule: "* * * * *"
+    command: php artisan schedule:run
+    envVars:
+      - fromService:
+          type: web
+          name: gestion-compte-api
+          envVarKeys:
+            - APP_KEY
+            - DATABASE_URL
+            - DB_PASSWORD
