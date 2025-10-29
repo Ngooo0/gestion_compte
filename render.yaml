@@ -9,6 +9,10 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+      - key: APP_URL
+        value: "https://gestion-compte-latest.onrender.com"
+      - key: L5_SWAGGER_USE_ABSOLUTE_PATH
+        value: "false"
       - key: APP_KEY
         sync: false
       - key: DATABASE_URL
