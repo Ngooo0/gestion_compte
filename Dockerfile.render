@@ -15,17 +15,25 @@ COPY composer.json composer.lock ./
 RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-scripts
 
 # Étape 2: Image finale pour l'application
-FROM php:8.3-fpm-alpine
+FROM php:8.3-apache
 
-# Installer les extensions PHP nécessaires
-RUN apk add --no-cache postgresql-dev \
-    && docker-php-ext-install pdo pdo_pgsql
+# Activer mod_rewrite pour les routes Laravel
+RUN a2enmod rewrite
+
+# Installer les extensions PHP et dépendances nécessaires
+RUN apt-get update && apt-get install -y \
+        libpq-dev \
+        && docker-php-ext-install pdo pdo_pgsql
 
 # Créer un utilisateur non-root
 RUN addgroup -g 1000 laravel && adduser -G laravel -g laravel -s /bin/sh -D laravel
 
 # Définir le répertoire de travail
 WORKDIR /var/www/html
+
+# Configuration d'Apache pour Laravel
+COPY docker/000-default.conf /etc/apache2/sites-available/000-default.conf
+RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
 # Copier les dépendances installées depuis l'étape de build
 COPY --from=composer-build /app/vendor ./vendor
@@ -79,9 +87,9 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 # Passer à l'utilisateur non-root
 USER laravel
 
-# Exposer le port par défaut (utile pour la documentation)
-EXPOSE 8000
+# Apache écoute sur le port 80 par défaut
+# Render redirigera le trafic vers ce port via la variable PORT
+EXPOSE 80
 
-# Commande par défaut — utiliser la variable d'environnement PORT si fournie par la plateforme (Render)
-# fallback vers 8000 si PORT non défini
-CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"]
+# Point d'entrée par défaut d'Apache
+CMD ["apache2-foreground"]
