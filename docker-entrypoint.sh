@@ -1,60 +1,46 @@
-#!/bin/bash
+# Basic runtime sanity checks for required DB envs
+echo "Starting docker-entrypoint.sh"
+MISSING=0
+for v in DB_HOST DB_PORT DB_DATABASE DB_USERNAME; do
+  eval val="\$$v"
+  if [ -z "$val" ]; then
+    echo "Required env $v is not set"
+    MISSING=1
+  fi
+done
 
-# Attendre que la base de données soit prête
-echo "Attente de la base de données..."
-if [ "$DB_CONNECTION" = "pgsql" ]; then
-    while ! pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE"; do
-        echo "PostgreSQL n'est pas encore prêt..."
-        sleep 2
-    done
-    echo "PostgreSQL est prêt !"
-elif [ "$DB_CONNECTION" = "mysql" ]; then
-    while ! mysqladmin ping -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USERNAME" -p"$DB_PASSWORD" --silent; do
-        echo "MySQL n'est pas encore prêt..."
-        sleep 2
-    done
-    echo "MySQL est prêt !"
-else
-    echo "Type de base de données non supporté ou connexion externe détectée. Passage à l'étape suivante..."
+if [ "$MISSING" -eq 1 ]; then
+  echo "One or more required DB env vars are missing. Aborting to avoid infinite wait." >&2
+  exit 1
 fi
 
-# Générer la clé d'application si elle n'existe pas
-if [ ! -f /var/www/html/.env ]; then
-    echo "Création du fichier .env..."
-    cp /var/www/html/.env.example /var/www/html/.env
+# Generate APP_KEY if not provided via env
+if [ -z "$APP_KEY" ]; then
+  echo "APP_KEY not set — generating one"
+  php artisan key:generate --force || true
 fi
 
-# Générer la clé d'application
-echo "Génération de la clé d'application..."
-php artisan key:generate
+echo "Waiting for database to be ready..."
+MAX_WAIT=120
+WAITED=0
+while ! pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" >/dev/null 2>&1; do
+  if [ "$WAITED" -ge "$MAX_WAIT" ]; then
+    echo "Timeout waiting for database after ${MAX_WAIT}s" >&2
+    exit 1
+  fi
+  echo "Database is unavailable - sleeping 1s (waited=${WAITED}s)"
+  sleep 1
+  WAITED=$((WAITED+1))
+done
 
-# Exécuter les migrations
-echo "Exécution des migrations..."
-php artisan migrate --force
+echo "Database is up - executing migrations"
+# Clear caches to avoid serving stale routes/config from image build
+php artisan route:clear || true
+php artisan config:clear || true
+php artisan cache:clear || true
 
-# Peupler la base de données (optionnel)
-if [ "$APP_ENV" = "local" ]; then
-    echo "Peuplement de la base de données..."
-    php artisan db:seed --force
-fi
+# Run migrations (non-blocking failure allowed)
+php artisan migrate --force || true
 
-# Générer la documentation Swagger
-echo "Génération de la documentation Swagger..."
-php artisan l5-swagger:generate
-
-# Mettre en cache les configurations, routes et vues
-echo "Mise en cache des configurations..."
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-
-# Définir les permissions
-echo "Configuration des permissions..."
-chown -R www-data:www-data /var/www/html/storage
-chown -R www-data:www-data /var/www/html/bootstrap/cache
-chmod -R 755 /var/www/html/storage
-chmod -R 755 /var/www/html/bootstrap/cache
-
-# Démarrer Apache
-echo "Démarrage d'Apache..."
-apache2-foreground
+echo "Starting Laravel application..."
+exec "$@"

@@ -1,39 +1,37 @@
+
 version: '3.8'
 
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: gestion-compte-app
-    restart: unless-stopped
-    working_dir: /var/www/html
-    volumes:
-      - ./:/var/www/html
+    build: .
+    image: compte_api_app:latest
+    container_name: compte_api_app
+    env_file:
+      - .env.docker
     ports:
-      - "8000:80"
+      - "8000:8000"
+    volumes:
+      - ./:/var/www/html:cached
+    depends_on:
+      - db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h ${DB_HOST:-db} -p ${DB_PORT:-5432} -U ${DB_USERNAME:-postgres} || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    command: ["/usr/local/bin/docker-entrypoint.sh", "php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+
+  db:
+    image: postgres:15-alpine
+    container_name: compte_api_db
     environment:
-      - APP_NAME=Gestion de Comptes
-      - APP_ENV=local
-      - APP_DEBUG=true
-      - APP_URL=http://localhost:8000
-      - DB_CONNECTION=pgsql
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT}
-      - DB_DATABASE=${DB_DATABASE}
-      - DB_USERNAME=${DB_USERNAME}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - CACHE_DRIVER=file
-      - QUEUE_CONNECTION=sync
-      - SESSION_DRIVER=file
-      - LOG_CHANNEL=stack
-      - L5_SWAGGER_GENERATE_ALWAYS=false
-      - L5_SWAGGER_BASE_PATH=http://localhost:8000
-      - L5_SWAGGER_CONST_HOST=http://localhost:8000
-    networks:
-      - gestion-compte-network
+      POSTGRES_DB: ${LOCAL_DB_DATABASE:-laravel}
+      POSTGRES_USER: ${LOCAL_DB_USERNAME:-laravel}
+      POSTGRES_PASSWORD: ${LOCAL_DB_PASSWORD:-password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
-
-networks:
-  gestion-compte-network:
-    driver: bridge
+volumes:
+  postgres_data:
