@@ -20,6 +20,18 @@ if [ -z "$APP_KEY" ]; then
   php artisan key:generate --force || true
 fi
 
+# If vendor is missing (bind mount in dev), install PHP dependencies at startup
+if [ ! -d "/var/www/html/vendor" ]; then
+  echo "vendor directory missing — installing composer dependencies"
+  if command -v composer >/dev/null 2>&1; then
+    composer install --no-interaction || true
+  else
+    echo "Composer not found in image, attempting to download composer..."
+    curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+    composer install --no-interaction || true
+  fi
+fi
+
 echo "Waiting for database to be ready..."
 MAX_WAIT=120
 WAITED=0
